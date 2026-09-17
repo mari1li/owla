@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lane + Vehicle Detection Demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px;
+         background: #111; color: #eee; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .bar { padding: 8px 12px; background: #222; border-radius: 6px;
+         margin-bottom: 8px; font-size: 13px; }
+  .ok { color: #6f6; }
+  .bad { color: #f66; }
+  .warn { color: #fc6; }
+  canvas#out { width: 100%; max-width: 900px; border-radius: 8px;
+               background: #000; display: block; }
+  canvas#work { display: none; }
+  video { display: none; }
+  .controls { max-width: 900px; margin-top: 16px; display: grid;
+              grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctrl { background: #1c1c1c; padding: 9px 12px; border-radius: 6px; }
+  .ctrl label { display: block; font-size: 12px; margin-bottom: 5px; color: #aaa; }
+  .ctrl input[type=range] { width: 100%; }
+  .val { color: #6cf; font-weight: 600; }
+  input[type=file] { margin-bottom: 12px; }
+  .section { grid-column: 1 / -1; font-size: 12px; color: #888;
+             text-transform: uppercase; letter-spacing: .05em;
+             margin-top: 10px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Lane + Vehicle Detection</h1>
+<div class="bar" id="cvstat">OpenCV.js: loading</div>
+<div class="bar" id="mlstat">Vehicle model: loading</div>
+<div class="bar" id="status">No video chosen yet.</div>
+<div class="bar" id="alert">&nbsp;</div>
+
+<input type="file" id="file" accept="video/*">
+<video id="vid" controls loop muted playsinline></video>
+<canvas id="out" width="960" height="540"></canvas>
+<canvas id="work"></canvas>
+
+<div class="controls">
+  <div class="section">Lane detection</div>
+  <div class="ctrl" style="grid-column: 1 / -1">
+    <label style="margin-bottom:6px">Edge method</label>
+    <select id="method" style="width:100%; padding:5px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+      <option value="canny" selected>Canny (gradient edges)</option>
+      <option value="tophat">Top-hat morphology (bright ridges)</option>
+      <option value="both">Both combined</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label>Top-hat kernel width: <span class="val" id="v-kw">25</span></label>
+    <input type="range" id="kw" min="5" max="61" step="2" value="25">
+  </div>
+  <div class="ctrl">
+    <label>Top-hat threshold: <span class="val" id="v-tht">25</span></label>
+    <input type="range" id="tht" min="5" max="120" value="25">
+  </div>
+  <div class="ctrl">
+    <label>Canny low: <span class="val" id="v-lo">50</span></label>
+    <input type="range" id="lo" min="0" max="255" value="50">
+  </div>
+  <div class="ctrl">
+    <label>Canny high: <span class="val" id="v-hi">150</span></label>
+    <input type="range" id="hi" min="0" max="255" value="150">
+  </div>
+  <div class="ctrl">
+    <label>ROI top (% height): <span class="val" id="v-top">60</span></label>
+    <input type="range" id="top" min="20" max="95" value="60">
+  </div>
+  <div class="ctrl">
+    <label>ROI top width (%): <span class="val" id="v-tw">12</span></label>
+    <input type="range" id="tw" min="2" max="80" value="12">
+  </div>
+  <div class="ctrl">
+    <label>ROI bottom (% height): <span class="val" id="v-bot">100</span></label>
+    <input type="range" id="bot" min="40" max="100" value="100">
+  </div>
+  <div class="ctrl">
+    <label>ROI bottom width (%): <span class="val" id="v-bw">90</span></label>
+    <input type="range" id="bw" min="20" max="100" value="90">
+  </div>
+  <div class="ctrl">
+    <label>Hough threshold: <span class="val" id="v-th">50</span></label>
+    <input type="range" id="th" min="10" max="200" value="50">
+  </div>
+  <div class="ctrl">
+    <label>Min slope: <span class="val" id="v-sl">0.5</span></label>
+    <input type="range" id="sl" min="0" max="20" value="5">
+  </div>
+  <div class="ctrl">
+    <label>Max slope: <span class="val" id="v-slx">3.0</span></label>
+    <input type="range" id="slx" min="10" max="80" value="30">
+  </div>
+  <div class="ctrl">
+    <label>White brightness cutoff: <span class="val" id="v-wht">190</span></label>
+    <input type="range" id="wht" min="100" max="250" value="190">
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="debugEdges">
+    <label for="debugEdges" style="margin:0">DEBUG: show what Canny sees</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="colorFilter" checked>
+    <label for="colorFilter" style="margin:0">White/yellow filter only</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="sideRule" checked>
+    <label for="sideRule" style="margin:0">Left lines must be on left half</label>
+  </div>
+
+  <div class="section">Vehicle detection</div>
+  <div class="ctrl">
+    <label>Confidence threshold: <span class="val" id="v-conf">0.45</span></label>
+    <input type="range" id="conf" min="10" max="90" value="45">
+  </div>
+  <div class="ctrl">
+    <label>Focal length (px) — calibrate this: <span class="val" id="v-foc">800</span></label>
+    <input type="range" id="foc" min="200" max="2500" value="800">
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="catVehicle" checked>
+    <label for="catVehicle" style="margin:0">Vehicles</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="catPerson" checked>
+    <label for="catPerson" style="margin:0">People &amp; bicycles</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="catHazard" checked>
+    <label for="catHazard" style="margin:0">Animals</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="catSign">
+    <label for="catSign" style="margin:0">Signs &amp; lights</label>
+  </div>
+  <div class="section">Merge safety margin</div>
+  <div class="ctrl">
+    <label>Minimum safe gap (seconds): <span class="val" id="v-gap">6</span></label>
+    <input type="range" id="gap" min="2" max="12" value="6">
+  </div>
+  <div class="ctrl">
+    <label style="margin-bottom:6px">Driver profile</label>
+    <select id="profile" style="width:100%; padding:4px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+      <option value="8">Very new driver (8s)</option>
+      <option value="6" selected>New driver (6s)</option>
+      <option value="4">Experienced (4s)</option>
+    </select>
+  </div>
+
+  <div class="section">Voice &amp; route guidance</div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="voiceOn" checked>
+    <label for="voiceOn" style="margin:0">Speak alerts aloud</label>
+  </div>
+  <div class="ctrl">
+    <label>Min seconds between spoken alerts: <span class="val" id="v-cool">4</span></label>
+    <input type="range" id="cool" min="1" max="15" value="4">
+  </div>
+  <div class="ctrl">
+    <label style="margin-bottom:6px">Exit is in which lane?</label>
+    <select id="exitLane" style="width:100%; padding:4px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+      <option value="right" selected>Right lane</option>
+      <option value="left">Left lane</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label>Warn this far before exit (miles): <span class="val" id="v-warn">0.7</span></label>
+    <input type="range" id="warn" min="1" max="30" value="7">
+  </div>
+  <div class="ctrl" style="grid-column: 1 / -1">
+    <label>OpenRouteService API key (free, no card — sign up at openrouteservice.org)</label>
+    <input type="text" id="orsKey" placeholder="paste your key here"
+           style="width:100%; padding:6px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+  </div>
+  <div class="ctrl" style="grid-column: 1 / -1">
+    <label>Search for a destination</label>
+    <div style="display:flex; gap:8px">
+      <input type="text" id="dest" placeholder="e.g. Stanford University"
+             style="flex:1; padding:6px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+      <button id="searchBtn" style="padding:6px 14px; background:#245; color:#eee; border:1px solid #468; border-radius:5px; cursor:pointer">
+        Search
+      </button>
+    </div>
+  </div>
+  <div class="ctrl" style="grid-column: 1 / -1">
+    <label>Pick the right one</label>
+    <select id="destPick" style="width:100%; padding:6px; background:#111; color:#eee; border:1px solid #444; border-radius:4px">
+      <option value="">- search first -</option>
+    </select>
+  </div>
+  <div class="ctrl toggle" style="grid-column: 1 / -1">
+    <button id="gpsBtn" style="padding:6px 14px; background:#245; color:#eee; border:1px solid #468; border-radius:5px; cursor:pointer">
+      Start GPS
+    </button>
+    <button id="routeBtn" style="padding:6px 14px; background:#252; color:#eee; border:1px solid #484; border-radius:5px; cursor:pointer">
+      Get route
+    </button>
+    <span id="gpsInfo" style="font-size:12px; color:#888">GPS off</span>
+  </div>
+  <div class="ctrl" style="grid-column: 1 / -1">
+    <div id="stepInfo" style="font-size:13px; color:#9cf">No route loaded.</div>
+  </div>
+
+  <div class="section">Display</div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="rearMode">
+    <label for="rearMode" style="margin:0">Rear-facing camera (mirrors zones)</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="showLanes" checked>
+    <label for="showLanes" style="margin:0">Show lane overlay</label>
+  </div>
+  <div class="ctrl toggle">
+    <input type="checkbox" id="showCars" checked>
+    <label for="showCars" style="margin:0">Show detection boxes</label>
+  </div>
+</div>
+
+<script>
+var cvReady = false, model = null, looping = false;
+var detections = [];         // latest vehicle detections
+var tracks = {};             // crude distance history per zone
+var busy = false;
+
+var cvstat  = document.getElementById('cvstat');
+var mlstat  = document.getElementById('mlstat');
+var statusEl= document.getElementById('status');
+var alertEl = document.getElementById('alert');
+var vid  = document.getElementById('vid');
+var out  = document.getElementById('out');
+var ctx  = out.getContext('2d');
+var work = document.getElementById('work');
+var wctx = work.getContext('2d', { willReadFrequently: true });
+
+// class -> { size in metres, whether that size is width or height, colour, category }
+var CLASSES = {
+  car:        { m: 1.8,  axis: 'w', cat: 'vehicle' },
+  truck:      { m: 2.4,  axis: 'w', cat: 'vehicle' },
+  bus:        { m: 2.5,  axis: 'w', cat: 'vehicle' },
+  motorcycle: { m: 0.8,  axis: 'w', cat: 'vehicle' },
+  person:     { m: 1.7,  axis: 'h', cat: 'person'  },
+  bicycle:    { m: 1.7,  axis: 'w', cat: 'person'  },
+  dog:        { m: 0.6,  axis: 'h', cat: 'hazard'  },
+  cat:        { m: 0.3,  axis: 'h', cat: 'hazard'  },
+  'stop sign':     { m: 0.75, axis: 'w', cat: 'sign' },
+  'traffic light': { m: 0.3,  axis: 'w', cat: 'sign' }
+};
+
+// ---- sliders -------------------------------------------------------------
+var S = {};
+[['lo','v-lo',1],['hi','v-hi',1],['top','v-top',1],['tw','v-tw',1],
+ ['bot','v-bot',1],['bw','v-bw',1],['th','v-th',1],['sl','v-sl',10],
+ ['conf','v-conf',100],['foc','v-foc',1],['gap','v-gap',1],['slx','v-slx',10],
+ ['wht','v-wht',1],['cool','v-cool',1],['warn','v-warn',10],
+ ['kw','v-kw',1],['tht','v-tht',1]]
+.forEach(function (t) {
+  var el = document.getElementById(t[0]);
+  S[t[0]] = el;
+  function show() {
+    var v = t[2] === 1 ? el.value : (el.value / t[2]).toFixed(2);
+    document.getElementById(t[1]).textContent = v;
+  }
+  el.addEventListener('input', show);
+  show();
+});
+
+// ---- speech ---------------------------------------------------------------
+// Alert fatigue is the real enemy. Rules:
+//   1. never repeat the same message inside the cooldown
+//   2. a higher-priority message can interrupt a lower one
+//   3. safety (something closing) always outranks navigation
+var lastSpoken = {};      // message key -> timestamp
+var lastAnySpeak = 0;
+var PRIORITY = { hazard: 3, safety: 2, nav: 1 };
+
+function speak(key, text, priority) {
+  if (!document.getElementById('voiceOn').checked) return;
+  if (!('speechSynthesis' in window)) return;
+
+  var now = performance.now();
+  var cooldownMs = (+S.cool.value) * 1000;
+
+  // same message recently? skip
+  if (lastSpoken[key] && now - lastSpoken[key] < cooldownMs) return;
+  // something else spoke very recently and this isn't urgent? skip
+  if (now - lastAnySpeak < 1200 && priority < PRIORITY.hazard) return;
+
+  if (priority >= PRIORITY.safety) window.speechSynthesis.cancel();
+
+  var u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.1;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+
+  lastSpoken[key] = now;
+  lastAnySpeak = now;
+}
+
+// ---- GPS + OpenRouteService ----------------------------------------------
+var gpsWatch = null, lastFix = null;
+var routeSteps = [];       // [{ lat, lon, instruction, type, name }]
+var announced = {};
+
+var ORS = 'https://api.openrouteservice.org';
+
+function haversineMiles(a, b) {
+  var R = 3958.8, toRad = Math.PI / 180;
+  var dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
+  var la1 = a.lat * toRad, la2 = b.lat * toRad;
+  var x = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+document.getElementById('gpsBtn').addEventListener('click', function () {
+  if (!navigator.geolocation) {
+    document.getElementById('gpsInfo').textContent = 'Geolocation not supported';
+    return;
+  }
+  if (gpsWatch === null) {
+    gpsWatch = navigator.geolocation.watchPosition(function (pos) {
+      lastFix = { lat: pos.coords.latitude, lon: pos.coords.longitude,
+                  speed: pos.coords.speed };
+      updateNav();
+    }, function (err) {
+      document.getElementById('gpsInfo').textContent = 'GPS error: ' + err.message;
+    }, { enableHighAccuracy: true, maximumAge: 1000 });
+    document.getElementById('gpsBtn').textContent = 'Stop GPS';
+    document.getElementById('gpsInfo').textContent = 'GPS starting...';
+  } else {
+    navigator.geolocation.clearWatch(gpsWatch);
+    gpsWatch = null; lastFix = null;
+    document.getElementById('gpsBtn').textContent = 'Start GPS';
+    document.getElementById('gpsInfo').textContent = 'GPS off';
+  }
+});
+
+// --- step 1: search places, fill the dropdown ---
+document.getElementById('searchBtn').addEventListener('click', function () {
+  var key = document.getElementById('orsKey').value.trim();
+  var dest = document.getElementById('dest').value.trim();
+  var stepInfo = document.getElementById('stepInfo');
+  var pick = document.getElementById('destPick');
+
+  if (!key)  { stepInfo.textContent = 'Enter your OpenRouteService API key first.'; return; }
+  if (!dest) { stepInfo.textContent = 'Type something to search for.'; return; }
+
+  stepInfo.textContent = 'Searching...';
+
+  var url = ORS + '/geocode/search?api_key=' + encodeURIComponent(key) +
+            '&text=' + encodeURIComponent(dest) + '&size=8';
+  // bias toward the user if we have a fix, so nearby matches rank first
+  if (lastFix) {
+    url += '&focus.point.lon=' + lastFix.lon + '&focus.point.lat=' + lastFix.lat;
+  }
+
+  fetch(url)
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status +
+        (r.status === 403 ? ' - key rejected or not activated yet' : ''));
+      return r.json();
+    })
+    .then(function (g) {
+      pick.innerHTML = '';
+      if (!g.features || !g.features.length) {
+        pick.innerHTML = '<option value="">- nothing found -</option>';
+        stepInfo.textContent = 'No matches for "' + dest + '".';
+        return;
+      }
+      g.features.forEach(function (f, i) {
+        var c = f.geometry.coordinates;         // [lon, lat]
+        var label = f.properties.label;
+        var extra = '';
+        if (lastFix) {
+          extra = '  (' + haversineMiles(lastFix, { lat: c[1], lon: c[0] }).toFixed(0) + ' mi)';
+        }
+        var o = document.createElement('option');
+        o.value = c[0] + ',' + c[1];
+        o.textContent = label + extra;
+        pick.appendChild(o);
+      });
+      stepInfo.textContent = g.features.length +
+        ' matches. Pick the right one, then Get route.';
+    })
+    .catch(function (e) {
+      stepInfo.textContent = 'Search failed - ' + e.message;
+      console.error('ORS geocode error:', e);
+    });
+});
+
+// --- step 2: route to whatever was picked ---
+document.getElementById('routeBtn').addEventListener('click', function () {
+  var key = document.getElementById('orsKey').value.trim();
+  var stepInfo = document.getElementById('stepInfo');
+  var picked = document.getElementById('destPick').value;
+
+  if (!key) { stepInfo.textContent = 'Enter your API key first.'; return; }
+  if (!lastFix) { stepInfo.textContent = 'Start GPS first so we know where you are.'; return; }
+  if (!picked) { stepInfo.textContent = 'Search for a destination and pick one first.'; return; }
+
+  var parts = picked.split(',');
+  var dLon = parseFloat(parts[0]), dLat = parseFloat(parts[1]);
+
+  stepInfo.textContent = 'Routing...';
+
+  fetch(ORS + '/v2/directions/driving-car/geojson', {
+    method: 'POST',
+    headers: { 'Authorization': key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      coordinates: [[lastFix.lon, lastFix.lat], [dLon, dLat]],
+      instructions: true
+    })
+  })
+    .then(function (r) {
+      return r.json().then(function (j) {
+        if (j && j.error) {
+          var m = typeof j.error === 'string' ? j.error :
+                  (j.error.message || JSON.stringify(j.error));
+          throw new Error(m);
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return j;
+      });
+    })
+    .then(function (route) {
+      var feat = route.features && route.features[0];
+      if (!feat) throw new Error('no route returned');
+
+      var coords = feat.geometry.coordinates;
+      var segs = feat.properties.segments || [];
+      routeSteps = [];
+      announced = {};
+
+      segs.forEach(function (seg) {
+        seg.steps.forEach(function (st) {
+          var idx = st.way_points ? st.way_points[0] : 0;
+          var c = coords[idx];
+          if (!c) return;
+          routeSteps.push({
+            lon: c[0], lat: c[1],
+            instruction: st.instruction || '',
+            type: st.type,
+            name: st.name || ''
+          });
+        });
+      });
+
+      var exits = routeSteps.filter(isExitStep).length;
+      stepInfo.textContent = 'Route loaded: ' + routeSteps.length +
+        ' steps, ' + exits + ' exit/ramp maneuvers.';
+    })
+    .catch(function (e) {
+      stepInfo.textContent = 'Routing failed - ' + e.message;
+      console.error('ORS error:', e);
+    });
+});
+
+// ORS step types: 7 = keep right, 8 = keep left, 12/13 = exit roundabout,
+// 6 = enter roundabout. Ramp/exit wording is the more reliable signal.
+function isExitStep(st) {
+  var s = (st.instruction || '').toLowerCase();
+  return s.indexOf('exit') !== -1 || s.indexOf('ramp') !== -1 ||
+         s.indexOf('take the') !== -1 || st.type === 7 || st.type === 8;
+}
+
+function sideOfStep(st) {
+  var s = (st.instruction || '').toLowerCase();
+  if (s.indexOf('left') !== -1) return 'left';
+  if (s.indexOf('right') !== -1) return 'right';
+  return document.getElementById('exitLane').value;   // fall back to the setting
+}
+
+function updateNav() {
+  if (!lastFix) return;
+  var mph = lastFix.speed != null ? (lastFix.speed * 2.237).toFixed(0) : '--';
+
+  if (!routeSteps.length) {
+    document.getElementById('gpsInfo').textContent = mph + ' mph  |  no route';
+    return;
+  }
+
+  // find the nearest upcoming exit-ish maneuver
+  var best = null, bestMi = 1e9, bestIdx = -1;
+  for (var i = 0; i < routeSteps.length; i++) {
+    if (!isExitStep(routeSteps[i])) continue;
+    var mi = haversineMiles(lastFix, routeSteps[i]);
+    if (mi < bestMi) { bestMi = mi; best = routeSteps[i]; bestIdx = i; }
+  }
+
+  if (!best) {
+    document.getElementById('gpsInfo').textContent = mph + ' mph  |  no exit ahead';
+    return;
+  }
+
+  document.getElementById('gpsInfo').textContent =
+    mph + ' mph  |  ' + bestMi.toFixed(2) + ' mi to next exit';
+  document.getElementById('stepInfo').textContent = 'Next: ' + best.instruction;
+
+  var warnAt = +S.warn.value / 10;
+  var side = sideOfStep(best);
+
+  if (bestMi <= warnAt && bestMi > 0.03 && !announced[bestIdx]) {
+    speak('exit-' + bestIdx,
+          'Exit in ' + bestMi.toFixed(1) + ' miles. Move to the ' + side +
+          ' lane when there is a safe gap.',
+          PRIORITY.nav);
+    if (bestMi < warnAt * 0.4) announced[bestIdx] = true;
+  }
+}
+
+// ---- library loading -----------------------------------------------------
+function markCvOk() { cvReady = true; cvstat.textContent = 'OpenCV.js: ready'; cvstat.className = 'bar ok'; }
+function onOpenCvReady() {
+  if (typeof cv !== 'undefined' && typeof cv.then === 'function') cv.then(markCvOk);
+  else markCvOk();
+}
+function onOpenCvError() {
+  cvstat.textContent = 'OpenCV.js failed to load - no lane detection.';
+  cvstat.className = 'bar bad';
+}
+
+function loadModel() {
+  if (typeof cocoSsd === 'undefined') {
+    mlstat.textContent = 'Vehicle model failed to load - check your connection.';
+    mlstat.className = 'bar bad';
+    return;
+  }
+  cocoSsd.load({ base: 'lite_mobilenet_v2' }).then(function (m) {
+    model = m;
+    mlstat.textContent = 'Vehicle model: ready';
+    mlstat.className = 'bar ok';
+  }).catch(function (e) {
+    mlstat.textContent = 'Vehicle model error: ' + e;
+    mlstat.className = 'bar bad';
+  });
+}
+
+// ---- video ---------------------------------------------------------------
+document.getElementById('profile').addEventListener('change', function (e) {
+  S.gap.value = e.target.value;
+  document.getElementById('v-gap').textContent = e.target.value;
+});
+
+document.getElementById('file').addEventListener('change', function (e) {
+  var f = e.target.files[0];
+  if (!f) return;
+  vid.src = URL.createObjectURL(f);
+  statusEl.textContent = 'Loading video...';
+});
+
+vid.addEventListener('loadedmetadata', function () {
+  var w = vid.videoWidth, h = vid.videoHeight;
+  if (!w || !h) { statusEl.textContent = 'Could not read video dimensions.'; return; }
+  out.width  = 960;
+  out.height = Math.round(960 * h / w);
+  work.width = out.width;
+  work.height = out.height;
+  statusEl.textContent = 'Video ' + w + 'x' + h + ' loaded.';
+  var p = vid.play();
+  if (p && p.catch) p.catch(function () {
+    statusEl.textContent = 'Autoplay blocked - press play on the controls.';
+  });
+});
+
+vid.addEventListener('play',  function () { if (!looping) { looping = true; requestAnimationFrame(tick); } });
+vid.addEventListener('pause', function () { looping = false; });
+vid.addEventListener('ended', function () { looping = false; });
+vid.addEventListener('error', function () { statusEl.textContent = 'Video failed to load. Try mp4/H.264.'; });
+
+// ---- main loop -----------------------------------------------------------
+function tick() {
+  if (vid.paused || vid.ended) { looping = false; return; }
+
+  // clean frame for the model (no overlays)
+  wctx.drawImage(vid, 0, 0, work.width, work.height);
+  // visible frame
+  ctx.drawImage(vid, 0, 0, out.width, out.height);
+
+  if (cvReady && document.getElementById('showLanes').checked) {
+    try { detectLanes(); } catch (e) { /* keep going */ }
+  }
+
+  // vehicle detection runs async, at whatever rate it can manage
+  if (model && !busy) {
+    busy = true;
+    model.detect(work).then(function (preds) {
+      detections = preds.filter(function (p) {
+        var c = CLASSES[p.class];
+        if (!c) return false;
+        if (p.score < (+S.conf.value / 100)) return false;
+        return catEnabled(c.cat);
+      });
+      busy = false;
+    }).catch(function () { busy = false; });
+  }
+
+  if (document.getElementById('showCars').checked) drawVehicles();
+
+  requestAnimationFrame(tick);
+}
+
+// ---- lane detection ------------------------------------------------------
+function detectLanes() {
+  var src = cv.imread(out);
+  var gray = new cv.Mat(), blur = new cv.Mat(), edges = new cv.Mat();
+  var mask = cv.Mat.zeros(out.height, out.width, cv.CV_8UC1);
+  var masked = new cv.Mat(), lines = new cv.Mat();
+  var poly = null, vec = null;
+  var hsv = null, mW = null, mY = null, mColor = null, lo1 = null, hi1 = null,
+      lo2 = null, hi2 = null, rgb = null;
+  var kern = null, tophat = null, thr = null, cannyM = null;
+
+  try {
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    if (document.getElementById('colorFilter').checked) {
+      // Lane markings are white or yellow. Everything else - asphalt, brick,
+      // glass, foliage - gets discarded before we look for edges at all.
+      rgb = new cv.Mat();
+      cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+      hsv = new cv.Mat();
+      cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+
+      mW = new cv.Mat(); mY = new cv.Mat(); mColor = new cv.Mat();
+
+      // white: any hue, low saturation, high value
+      var wCut = +S.wht.value;
+      lo1 = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 0, wCut, 0]);
+      hi1 = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 60, 255, 255]);
+      cv.inRange(hsv, lo1, hi1, mW);
+
+      // yellow: hue band, decent saturation
+      lo2 = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [15, 80, 120, 0]);
+      hi2 = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [35, 255, 255, 255]);
+      cv.inRange(hsv, lo2, hi2, mY);
+
+      cv.bitwise_or(mW, mY, mColor);
+      cv.bitwise_and(gray, mColor, gray);
+    }
+
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+
+    var method = document.getElementById('method').value;
+
+    if (method === 'canny') {
+      cv.Canny(blur, edges, +S.lo.value, +S.hi.value);
+    } else {
+      // TOP-HAT: white top-hat = image minus its opening. An opening with a
+      // wide horizontal kernel wipes out anything narrower than the kernel,
+      // so subtracting it leaves exactly the thin bright ridges - which is
+      // what a lane marking is. Unlike Canny this is relative to the local
+      // background, so shadows and dark asphalt don't change the result.
+      var kw = +S.kw.value;
+      if (kw % 2 === 0) kw += 1;
+      kern = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(kw, 1));
+      tophat = new cv.Mat();
+      cv.morphologyEx(blur, tophat, cv.MORPH_TOPHAT, kern);
+
+      thr = new cv.Mat();
+      cv.threshold(tophat, thr, +S.tht.value, 255, cv.THRESH_BINARY);
+
+      if (method === 'tophat') {
+        thr.copyTo(edges);
+      } else {
+        // both: union of gradient edges and bright ridges
+        cannyM = new cv.Mat();
+        cv.Canny(blur, cannyM, +S.lo.value, +S.hi.value);
+        cv.bitwise_or(thr, cannyM, edges);
+      }
+    }
+
+    var w = out.width, h = out.height;
+    var topY = Math.round(h * (+S.top.value / 100));
+    var botY = Math.round(h * (+S.bot.value / 100));
+    var halfTop = Math.round(w * (+S.tw.value / 200));
+    var halfBot = Math.round(w * (+S.bw.value / 200));
+    var pts = [
+      Math.round(w/2 - halfBot), botY,
+      Math.round(w/2 - halfTop), topY,
+      Math.round(w/2 + halfTop), topY,
+      Math.round(w/2 + halfBot), botY
+    ];
+    poly = cv.matFromArray(4, 1, cv.CV_32SC2, pts);
+    vec = new cv.MatVector(); vec.push_back(poly);
+    cv.fillPoly(mask, vec, new cv.Scalar(255));
+    cv.bitwise_and(edges, mask, masked);
+    cv.HoughLinesP(masked, lines, 2, Math.PI/180, +S.th.value, 40, 100);
+
+    // Debug view: paint the masked edge image straight onto the canvas so you
+    // can see exactly which pixels Hough is being given.
+    if (document.getElementById('debugEdges').checked) {
+      var dbg = new cv.Mat();
+      cv.cvtColor(masked, dbg, cv.COLOR_GRAY2RGBA);
+      cv.imshow(out, dbg);
+      dbg.delete();
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0], pts[1]);
+    for (var k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k+1]);
+    ctx.closePath(); ctx.stroke();
+
+    var minSlope = +S.sl.value / 10, maxSlope = +S.slx.value / 10;
+    var sideRule = document.getElementById('sideRule').checked;
+    var mid = out.width / 2;
+    var left = 0, right = 0, rejected = 0;
+
+    for (var i = 0; i < lines.rows; i++) {
+      var x1 = lines.data32S[i*4],   y1 = lines.data32S[i*4+1];
+      var x2 = lines.data32S[i*4+2], y2 = lines.data32S[i*4+3];
+      if (x2 === x1) continue;
+      var slope = (y2 - y1) / (x2 - x1);
+      var a = Math.abs(slope);
+
+      // too horizontal (overhead wires, sign gantries) or too vertical (poles)
+      if (a < minSlope || a > maxSlope) { rejected++; continue; }
+
+      // a left lane line leans one way AND sits on the left of frame.
+      // anything violating that is almost certainly not a lane marking.
+      var cx = (x1 + x2) / 2;
+      if (sideRule) {
+        if (slope < 0 && cx > mid) { rejected++; continue; }
+        if (slope > 0 && cx < mid) { rejected++; continue; }
+      }
+
+      ctx.strokeStyle = slope < 0 ? '#4af' : '#f64';
+      if (slope < 0) left++; else right++;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    statusEl.textContent = 'lane lines  left: ' + left + '  right: ' + right +
+                           '  (rejected ' + rejected + ')' +
+                           '   |   objects: ' + detections.length;
+  } finally {
+    if (poly) poly.delete(); if (vec) vec.delete();
+    if (rgb) rgb.delete(); if (hsv) hsv.delete();
+    if (mW) mW.delete(); if (mY) mY.delete(); if (mColor) mColor.delete();
+    if (lo1) lo1.delete(); if (hi1) hi1.delete();
+    if (lo2) lo2.delete(); if (hi2) hi2.delete();
+    if (kern) kern.delete(); if (tophat) tophat.delete();
+    if (thr) thr.delete(); if (cannyM) cannyM.delete();
+    src.delete(); gray.delete(); blur.delete();
+    edges.delete(); mask.delete(); masked.delete(); lines.delete();
+  }
+}
+
+// ---- vehicles ------------------------------------------------------------
+function zoneOf(centerX) {
+  var third = out.width / 3;
+  var zone;
+  if (centerX < third) zone = 'left';
+  else if (centerX > third * 2) zone = 'right';
+  else zone = 'behind';
+
+  // A rear-facing camera sees the world mirrored: something in the lane to
+  // your RIGHT appears on the LEFT of the image. Flip so alerts match reality.
+  if (document.getElementById('rearMode').checked) {
+    if (zone === 'left') return 'right';
+    if (zone === 'right') return 'left';
+    return 'behind';
+  }
+  return zone === 'behind' ? 'ahead' : zone;
+}
+
+function catEnabled(cat) {
+  if (cat === 'vehicle') return document.getElementById('catVehicle').checked;
+  if (cat === 'person')  return document.getElementById('catPerson').checked;
+  if (cat === 'hazard')  return document.getElementById('catHazard').checked;
+  if (cat === 'sign')    return document.getElementById('catSign').checked;
+  return false;
+}
+
+var CAT_COLOR = {
+  vehicle: '#6cf',
+  person:  '#f2f',   // vulnerable road users stand out
+  hazard:  '#fc6',
+  sign:    '#9f9'
+};
+
+function drawVehicles() {
+  var focal = +S.foc.value;
+  var now = performance.now();
+  var nearest = {};
+  var vulnerable = [];
+
+  for (var i = 0; i < detections.length; i++) {
+    var d = detections[i];
+    var meta = CLASSES[d.class];
+    if (!meta) continue;
+
+    var x = d.bbox[0], y = d.bbox[1], bw = d.bbox[2], bh = d.bbox[3];
+    var px = meta.axis === 'w' ? bw : bh;
+    if (px < 8) continue;
+
+    // pinhole model against this class's real-world size
+    var dist = (meta.m * focal) / px;
+    var cx = x + bw / 2;
+    var zone = zoneOf(cx);
+
+    var color = CAT_COLOR[meta.cat] || '#fff';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = meta.cat === 'person' ? 4 : 3;
+    ctx.strokeRect(x, y, bw, bh);
+
+    var label = d.class + '  ' + dist.toFixed(0) + 'm  (' + zone + ')';
+    ctx.font = '14px system-ui';
+    var tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(x, Math.max(0, y - 20), tw + 10, 20);
+    ctx.fillStyle = color;
+    ctx.fillText(label, x + 5, Math.max(12, y - 6));
+
+    if (meta.cat === 'person' && dist < 60) {
+      vulnerable.push(d.class + ' ' + zone + ' ~' + dist.toFixed(0) + 'm');
+    }
+
+    if (meta.cat === 'vehicle') {
+      if (!nearest[zone] || dist < nearest[zone].dist) {
+        nearest[zone] = { dist: dist, label: d.class };
+      }
+    }
+  }
+
+  var msgs = [];
+  var threshold = +S.gap.value;
+
+  if (vulnerable.length) {
+    msgs.push('PERSON: ' + vulnerable.join(', '));
+    speak('person', 'Person ahead', PRIORITY.hazard);
+  }
+
+  ['left', 'ahead', 'behind', 'right'].forEach(function (z) {
+    if (!nearest[z]) {
+      delete tracks[z];
+      if (z === 'left' || z === 'right') {
+        msgs.push(z.toUpperCase() + ': no vehicle detected');
+      }
+      return;
+    }
+    var cur = nearest[z].dist;
+    var prev = tracks[z];
+
+    if (prev && now - prev.t > 150) {
+      var dt = (now - prev.t) / 1000;
+      var closing = (prev.d - cur) / dt;
+      tracks[z] = { d: cur, t: now };
+
+      if (z === 'left' || z === 'right') {
+        if (closing > 0.5) {
+          var tta = cur / closing;
+          if (tta < threshold) {
+            msgs.push(z.toUpperCase() + ': vehicle closing, ' + tta.toFixed(1) +
+                      's - gap below your ' + threshold + 's margin');
+            speak('close-' + z, 'Vehicle closing on your ' + z, PRIORITY.safety);
+          } else {
+            msgs.push(z.toUpperCase() + ': closing, ' + tta.toFixed(1) + 's gap');
+          }
+        } else {
+          msgs.push(z.toUpperCase() + ': vehicle at ' + cur.toFixed(0) +
+                    'm, not closing');
+        }
+      } else if (closing > 1.5) {
+        msgs.push(z.toUpperCase() + ': closing at ' + closing.toFixed(1) + ' m/s');
+      }
+    } else if (!prev) {
+      tracks[z] = { d: cur, t: now };
+    }
+  });
+
+  if (msgs.length) {
+    alertEl.textContent = msgs.join('   |   ') + '   -   always check your mirror';
+    alertEl.className = 'bar warn';
+  } else {
+    alertEl.innerHTML = '&nbsp;';
+    alertEl.className = 'bar';
+  }
+}
+</script>
+
+<script async src="https://docs.opencv.org/4.x/opencv.js"
+        onload="onOpenCvReady();" onerror="onOpenCvError();"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
+        onload="loadModel();"></script>
+</body>
+</html>
