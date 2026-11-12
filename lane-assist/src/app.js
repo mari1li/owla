@@ -45,7 +45,11 @@ export function startApp() {
   const controls = createControls('controls-slot', {
     onCamera: () => camera.start(),
     onNav: toggleNav,
-    onMute: () => { voice.setMuted(!voice.muted); controls.setMuted(voice.muted); },
+    onMute: () => {
+      voice.setMuted(!voice.muted);
+      voice.unlock(voice.muted ? '' : 'Voice guidance on');   // a tap, so it also unlocks speech
+      controls.setMuted(voice.muted);
+    },
     onTrip: () => downloadGpx(trip.pts.length ? trip.pts : savedTrip),
   });
   const cameraView = createCameraView('camera-slot', {
@@ -176,21 +180,20 @@ export function startApp() {
   // ---------- navigation ----------
   function toggleNav() {
     if (!S.routed) return;
-    if (!S.started) {
-      voice.unlock();          // iOS only allows speech after a tap; unlock it here
-      S.started = true;
-    }
+    S.started = true;
     camera.start();            // same tap, so iOS shows the camera prompt
     S.navigating = !S.navigating;
+    // iPhones only allow speech after a tap: speaking here, in the tap, unlocks it.
+    voice.unlock(S.navigating ? 'Starting navigation' : 'Navigation stopped');
     if (S.navigating) {
       if (S.arrived) { S.s = 0; S.speed = 0; S.arrived = false; if (S.source === 'gps') clearTrip(); }
       if (S.source === 'gps') { startGps(onFix); controls.setTrip(null); updateMatch(); }
       S.heading = null;
       mapView.setFollow(true);
       keepAwake(true);
+      instructions.speakNext();
     } else {
       keepAwake(false);
-      voice.stop();
       endTrip();
       instructions.show({ text: 'Navigation stopped', sub: [tripSummary(), 'Start navigation to resume guidance.'].filter(Boolean).join(' ') });
     }
@@ -200,7 +203,7 @@ export function startApp() {
     S.navigating = false; S.arrived = true;
     endTrip();
     instructions.show({ text: 'You have arrived', sub: tripSummary() || 'Start navigation to drive the route again, or change the route.' });
-    voice.say('You have arrived', 3);
+    voice.announce('You have arrived');
     keepAwake(false);
     controls.setNavigating(false);
   }
@@ -260,6 +263,8 @@ export function startApp() {
   }
 
   // ---------- start ----------
+  voice.init();
+  if (!voice.supported) controls.setVoiceUnavailable();
   setMargin(S.margin);
   setSource(S.source);
   if (savedTrip) controls.setTrip('Save last trip');

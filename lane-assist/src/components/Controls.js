@@ -29,6 +29,11 @@ export function createControls(slotId, { onCamera, onNav, onMute, onTrip }) {
       mute.setAttribute('aria-pressed', String(m));
       setText(mute, m ? 'Muted' : 'Voice on');
     },
+    setVoiceUnavailable() {
+      mute.disabled = true;
+      setText(mute, 'No voice');
+      mute.title = "This browser can't speak";
+    },
     // label: button text, or null to hide it.
     setTrip(label) {
       tripBtn.hidden = !label;

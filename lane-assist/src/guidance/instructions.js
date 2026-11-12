@@ -1,12 +1,19 @@
 /* Instruction hysteresis: a more urgent instruction takes over at once, anything else has to
-   hold for 0.9 s so detection flicker doesn't chatter. render() shows it; say() speaks it. */
+   hold for 0.9 s so detection flicker doesn't chatter. render() shows it; say() speaks it.
+
+   Quiet instructions ("Continue on I-280") are shown but not spoken, except:
+   - the first one after navigation starts (speakNext()), so the driver hears where things stand;
+   - the first one after a status message (waiting for GPS, off route), so the driver hears
+     that it's sorted. */
 export function createInstructions({ render, say, holdMs = 900 }) {
-  let shown = null, cand = null, candSince = 0;
+  let shown = null, cand = null, candSince = 0, forceSpeak = false;
 
   function commit(next) {
+    const speakIt = !next.silent || forceSpeak || (shown && shown.status && !next.status);
+    forceSpeak = false;
     shown = next; cand = null;
     render(next);
-    if (!next.silent) say((next.say || next.text).replace(/ — /g, ', '), next.pri);
+    if (speakIt) say((next.say || next.text).replace(/ — /g, ', '), next.pri);
   }
 
   return {
@@ -20,6 +27,10 @@ export function createInstructions({ render, say, holdMs = 900 }) {
     show(ins) {
       shown = null; cand = null;
       render(ins);
+    },
+    // Speak the next instruction even if it's a quiet one.
+    speakNext() {
+      shown = null; cand = null; forceSpeak = true;
     },
   };
 }
