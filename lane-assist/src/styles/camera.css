@@ -1,0 +1,29 @@
+.tag {
+  position: absolute; z-index: 500; font-size: 11.5px; color: var(--muted);
+  background: rgba(12,20,16,.85); padding: 3px 8px; border-radius: 6px; pointer-events: none;
+}
+.tag.br { right: 8px; bottom: 8px; }
+.tag.tl { left: 8px; top: 8px; }
+.tag.bl { left: 8px; bottom: 8px; max-width: calc(100% - 16px); }
+.roi-btn { position: absolute; right: 8px; top: 8px; z-index: 510; min-height: 34px; padding: 0 10px; font-size: 12.5px; background: rgba(24,37,30,.92); }
+.roi-bar {
+  position: absolute; left: 8px; right: 8px; top: 8px; z-index: 510;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  pointer-events: none;   /* corners under the gaps stay draggable */
+}
+.roi-bar.low { top: auto; bottom: 8px; flex-wrap: wrap-reverse; }
+.roi-bar .btn { pointer-events: auto; }
+.roi-bar .btn { min-height: 34px; padding: 0 10px; font-size: 12.5px; background: rgba(24,37,30,.92); }
+.roi-bar .btn.primary { background: var(--guide-lit); color: var(--ink); }
+.roi-bar .hint { flex: 0 1 auto; font-size: 11.5px; line-height: 1.35; color: var(--paper); background: rgba(12,20,16,.85); padding: 3px 8px; border-radius: 6px; }
+#videoPane.editing #view { touch-action: none; cursor: grab; }
+.tag.tr { right: 8px; top: 8px; }
+
+#view { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+#video { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+.empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 20px; text-align: center; color: var(--muted);
+}
+.empty p { margin: 0; max-width: 34ch; line-height: 1.45; }
+#visionStatus { line-height: 1.4; }

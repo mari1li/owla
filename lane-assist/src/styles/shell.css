@@ -1,0 +1,22 @@
+/* Header + honesty line */
+header {
+  display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap;
+  padding: 10px 16px 4px;
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.honest { font-size: 12.5px; color: var(--muted); }
+
+/* App shell: nav bar + pages */
+.app { flex: 1; min-height: 0; display: flex; }
+.page { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.tabbar { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 16px 16px; }
+.tab {
+  width: 72px; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  color: var(--muted); font: 500 12px 'Archivo', system-ui, sans-serif; cursor: pointer;
+}
+.tab svg { width: 22px; height: 22px; }
+.tab:hover { color: var(--paper); }
+.tab[aria-current=page] { background: var(--raise); border-color: var(--line); color: var(--paper); }
+.tab:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }

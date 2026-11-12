@@ -1,0 +1,25 @@
+/* Route entry */
+.route { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 16px 4px; align-items: center; }
+.field {
+  flex: 1 1 200px; min-width: 0; min-height: 44px; padding: 0 12px;
+  background: var(--raise); color: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+  font: 400 16px 'Archivo', system-ui, sans-serif;
+}
+.field::placeholder { color: var(--muted); }
+.field:focus { outline: 2px solid var(--guide-lit); outline-offset: -1px; }
+.ac { position: relative; flex: 1 1 200px; min-width: 0; display: flex; }
+.ac .field { flex: 1; }
+.suggest {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 3000;
+  margin: 0; padding: 4px; list-style: none; max-height: 320px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5);
+}
+.suggest li { min-height: 44px; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: grid; gap: 2px; align-content: center; }
+.suggest li .m { font-weight: 600; }
+.suggest li .r { color: var(--muted); font-size: 12.5px; }
+.suggest li[aria-selected=true], .suggest li:hover { background: var(--raise); }
+.route-msg { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+.route-msg:empty { display: none; }
+.route-sum { display: flex; align-items: center; gap: 10px; padding: 6px 16px 0; font-size: 13.5px; }
+#routeText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

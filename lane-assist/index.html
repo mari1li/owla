@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Navigation and a forward camera, combined into one spoken instruction for new drivers.">
+  <meta name="theme-color" content="#0C1410">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Lane Assist</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Each slot is replaced by a component from src/components when the app starts. -->
+  <div id="header-slot"></div>
+  <div class="app">
+    <div id="tabbar-slot"></div>
+
+    <div class="page" id="pageNav">
+      <div id="route-slot"></div>
+      <div id="controls-slot"></div>
+      <main class="stage" id="stage">
+        <div id="map-slot"></div>
+        <div id="camera-slot"></div>
+        <div id="guidance-slot"></div>
+      </main>
+    </div>
+
+    <div class="page profile-page" id="pageProfile" hidden>
+      <div id="driver-slot"></div>
+    </div>
+  </div>
+
+  <noscript>Lane Assist needs JavaScript.</noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

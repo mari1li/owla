@@ -1,0 +1,6 @@
+/* Controls */
+.controls {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 16px 10px;
+  position: relative;
+}

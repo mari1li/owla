@@ -1,0 +1,10 @@
+{
+  "name": "New-driver lane assist",
+  "short_name": "Lane Assist",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0C1410",
+  "theme_color": "#0C1410",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

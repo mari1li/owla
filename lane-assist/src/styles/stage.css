@@ -1,0 +1,14 @@
+/* Stage */
+.stage {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "map video" "map output";
+  gap: 10px;
+  padding: 0 16px 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.pane { position: relative; border-radius: 10px; overflow: hidden; background: #0a110d; border: 1px solid var(--line); min-height: 0; }
+#mapPane { grid-area: map; }
+#videoPane { grid-area: video; display: flex; align-items: center; justify-content: center; }
