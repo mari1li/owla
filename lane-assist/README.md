@@ -36,7 +36,18 @@ With Bun: `bun install`, then `bunx --bun vite`, `bunx --bun vitest run` and `bu
 Browsers only allow the camera and GPS on a **secure (https://) page**, so the phone needs an
 https address. A plain `http://<computer-ip>:5173` won't work.
 
-**Netlify** (free; `netlify.toml` is already set up):
+**GitHub Pages** (free; the workflow is in `.github/workflows/pages.yml` at the repo root):
+
+1. One time: on GitHub, open the repo's **Settings → Pages** and set **Source** to **GitHub Actions**.
+2. Push to main. The **Actions** tab shows the build: it installs, runs the tests, builds and
+   publishes. If the tests fail, nothing is published.
+3. The app is at **https://mari1li.github.io/owla/**. Every push that changes `lane-assist/`
+   redeploys it in a minute or two.
+
+The build is served from `/owla/`, so the workflow sets `BASE_PATH=/owla/`. Locally, and on
+Netlify, it stays at `/`.
+
+**Netlify** (also free; `netlify.toml` is already set up):
 
 - **From Git:** in Netlify choose **Add new site → Import an existing project**, pick the
   `owla` repo, and set **Base directory** to `lane-assist`. The rest comes from `netlify.toml`
