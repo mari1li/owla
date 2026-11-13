@@ -9,6 +9,7 @@ import './styles/map.css';
 import './styles/camera.css';
 import './styles/guidance.css';
 import './styles/driver.css';
+import './styles/pricing.css';
 import './styles/responsive.css';   // last: overrides the layout for phones
 
 import { startApp } from './app.js';

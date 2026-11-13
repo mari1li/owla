@@ -3,8 +3,9 @@ import { mount } from '../lib/dom.js';
 const ICONS = {
   nav: '<path d="M12 2 L20 21 L12 17 L4 21 Z" fill="currentColor"/>',
   profile: '<circle cx="12" cy="7.5" r="4.2" fill="currentColor"/><path d="M3.5 21.5c0-4.7 3.8-8 8.5-8s8.5 3.3 8.5 8z" fill="currentColor"/>',
+  plans: '<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="currentColor"/>',
 };
-const TABS = [['nav', 'Navigate'], ['profile', 'Driver']];
+const TABS = [['nav', 'Navigate'], ['profile', 'Driver'], ['plans', 'Plans']];
 
 // The nav bar: a left rail on wide screens, a bottom bar on phones (see styles/responsive.css).
 export function createTabBar(slotId, { onSelect }) {

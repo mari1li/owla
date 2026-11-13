@@ -69,3 +69,19 @@ describe('withPosition', () => {
     expect(withPosition(route, { source: 'sim', fix: null })).toBe(route);
   });
 });
+
+import { planPrice } from '../src/components/PricingPage.js';
+import { PLANS } from '../src/config.js';
+
+describe('plan prices', () => {
+  const plus = PLANS.find(p => p.id === 'plus');
+  it('shows Plus at $3.99 a month', () => {
+    expect(planPrice(plus, 'monthly')).toEqual({ big: '$3.99', small: '/month', note: 'or $34.99/year' });
+  });
+  it('shows the yearly price with its monthly equivalent and saving', () => {
+    expect(planPrice(plus, 'yearly')).toEqual({ big: '$34.99', small: '/year', note: '$2.91/month · save 27%' });
+  });
+  it('keeps Free free', () => {
+    expect(planPrice(PLANS[0], 'yearly').big).toBe('$0');
+  });
+});

@@ -58,3 +58,73 @@ describe('route matching', () => {
     expect(G.s).toBe(s);
   });
 });
+
+describe('the location stream', () => {
+  // A fake navigator.geolocation that the test drives by hand.
+  const fakeGeo = () => {
+    const g = { watches: 0, cleared: 0, ok: null, err: null };
+    g.watchPosition = (ok, err) => { g.watches++; g.ok = ok; g.err = err; return g.watches; };
+    g.clearWatch = () => { g.cleared++; };
+    return g;
+  };
+  const pos = (lat, acc = 5) => ({ coords: { latitude: lat, longitude: -122, accuracy: acc, speed: null, heading: null }, timestamp: Date.now() });
+
+  let geo;
+  beforeEach(async () => {
+    const m = await import('../src/nav/gps.js');
+    m.stopGps(); m.resetMatch(); G.fix = null; G.denied = false; G.coarse = false;
+    geo = fakeGeo(); m.setGeolocation(geo);
+  });
+
+  it('asks for updates without a timeout (a timeout can end the stream on iPhones)', async () => {
+    const { startGps } = await import('../src/nav/gps.js');
+    let opts;
+    geo.watchPosition = (ok, err, o) => { opts = o; geo.ok = ok; return 1; };
+    startGps(() => {});
+    expect(opts.timeout).toBeUndefined();
+    expect(opts.enableHighAccuracy).toBe(true);
+  });
+  it('starts the stream again after a timeout or lost signal', async () => {
+    const { startGps } = await import('../src/nav/gps.js');
+    startGps(() => {});
+    geo.err({ code: 3 });
+    expect(geo.watches).toBe(2);
+    expect(G.watch).not.toBeNull();
+  });
+  it('stops for good when location is refused', async () => {
+    const { startGps } = await import('../src/nav/gps.js');
+    startGps(() => {});
+    geo.err({ code: 1 });
+    expect(G.denied).toBe(true);
+    expect(G.watch).toBeNull();
+  });
+  it('restarts a stream that has gone quiet', async () => {
+    const { startGps, checkGps } = await import('../src/nav/gps.js');
+    startGps(() => {});
+    geo.ok(pos(37));
+    checkGps(G.fix.now + 5000);
+    expect(geo.watches).toBe(1);
+    checkGps(G.fix.now + 11000);
+    expect(geo.watches).toBe(2);
+  });
+  it('flags approximate location and keeps it out of route matching and speed', async () => {
+    const { startGps } = await import('../src/nav/gps.js');
+    loadRoute(straightRoute());
+    const seen = [];
+    startGps(f => seen.push(f));
+    geo.ok(pos(37.005, 1500));
+    expect(G.coarse).toBe(true);
+    expect(G.speed).toBe(0);
+    matchFix(R);
+    expect(G.s).toBeNull();
+    expect(G.offRoute).toBe(false);
+    expect(seen).toHaveLength(1);
+  });
+  it('reports a stale fix in the status', async () => {
+    const { startGps, gpsStatus } = await import('../src/nav/gps.js');
+    startGps(() => {});
+    geo.ok(pos(37, 6));
+    expect(gpsStatus('gps', G.fix.now + 1000).text).toBe('GPS ±6 m');
+    expect(gpsStatus('gps', G.fix.now + 15000).text).toBe('GPS lost 15 s');
+  });
+});

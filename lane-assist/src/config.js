@@ -31,6 +31,46 @@ export const KIND_NOUN = { exit: 'Exit', fork: 'Fork', ramp: 'Ramp', turn: 'Turn
 // picture from a dash-mounted phone; it can be moved anywhere (see vision/roi.js).
 export const ROI_DEFAULT = Object.freeze({ tl: [0.42, 0.60], tr: [0.58, 0.60], br: [1, 0.94], bl: [0, 0.94] });
 
+// Plans shown on the Plans tab. Prices in USD. Payments aren't wired up yet: the paid plans
+// show "Coming soon". `ready: false` marks features that are planned but not built.
+export const PLANS = [
+  {
+    id: 'free', name: 'Free', tagline: 'Everything that keeps you safe on the road.',
+    monthly: 0, yearly: 0,
+    features: [
+      { text: 'Turn-by-turn navigation with voice', ready: true },
+      { text: 'Lane detection and the lane ribbon', ready: true },
+      { text: 'Closing-traffic and person warnings', ready: true },
+      { text: 'Blind-spot reminders on every lane change', ready: true },
+      { text: 'Three driver profiles (8 s, 6 s, 4 s margins)', ready: true },
+      { text: 'Last trip saved as a GPX file', ready: true },
+    ],
+  },
+  {
+    id: 'plus', name: 'Plus', tagline: 'For learners building skills and logging hours.',
+    monthly: 3.99, yearly: 34.99, popular: true,
+    features: [
+      { text: 'Everything in Free', ready: true },
+      { text: 'Unlimited trip history', ready: false },
+      { text: 'Practice-hours log for your permit (day and night hours)', ready: false },
+      { text: 'Drive report after each trip: following distance, hard braking, lane changes', ready: false },
+      { text: 'Weekly progress summary', ready: false },
+      { text: 'Choose the voice, speed and how chatty it is', ready: false },
+    ],
+  },
+  {
+    id: 'family', name: 'Family', tagline: 'For a parent or instructor riding along.',
+    monthly: 7.99, yearly: 69.99,
+    features: [
+      { text: 'Everything in Plus', ready: true },
+      { text: 'Up to 4 drivers', ready: false },
+      { text: 'Supervisor view: trip summaries and practice hours for each driver', ready: false },
+      { text: 'Share a trip report with a link', ready: false },
+      { text: 'Export practice hours for the DMV', ready: false },
+    ],
+  },
+];
+
 export const STORAGE = { trip: 'laneAssistTrip', roi: 'laneAssistRoi' };
 
 export const MAP_START = { center: [37.3382, -121.8863], zoom: 12 };

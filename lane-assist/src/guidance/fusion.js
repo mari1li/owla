@@ -76,12 +76,16 @@ export function decide(L, nx, margin, { camLive, road }) {
 }
 
 // Position problems outrank route advice, but never a person or closing traffic.
-// gps: { source, fix, denied, err, offRoute }
+// gps: { source, fix, denied, err, offRoute, coarse, stale }
 export function withPosition(ins, gps) {
   if (gps.source !== 'gps' || ins.pri <= 2) return ins;
   // status: the instruction after one of these is spoken even if it's a quiet one.
   if (!gps.fix) return { pri: 3, key: gps.denied ? 'gps-off' : 'gps-wait', text: gps.denied ? 'Location is off' : 'Waiting for GPS…',
     sub: gps.err || 'Finding your position. It can take a minute, and needs a view of the sky.', silent: !gps.denied, status: true };
+  if (gps.coarse) return { pri: 3, key: 'gps-coarse', text: 'Location is only approximate',
+    sub: 'Turn on Precise Location: Settings → Privacy & Security → Location Services → Safari Websites → Precise Location.', status: true };
+  if (gps.stale) return { pri: 3, key: 'gps-lost', text: 'GPS signal lost',
+    sub: 'Showing your last known position. Directions continue when the signal comes back.', silent: true, status: true };
   if (gps.offRoute) return { pri: 3, key: 'off-route', text: 'Off route — finding a new route',
     sub: "Keep driving normally. Directions come back as soon as there's a new route.", status: true };
   return ins;

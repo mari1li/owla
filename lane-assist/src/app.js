@@ -4,7 +4,7 @@ import { $ } from './lib/dom.js';
 import { keepAwake } from './lib/wakeLock.js';
 
 import { R, planRoute, currentRoad } from './nav/route.js';
-import { G, startGps, stopGps, matchFix, resetMatch, currentPlace, gpsStatus } from './nav/gps.js';
+import { G, startGps, stopGps, restartGps, checkGps, gpsAge, STALE_MS, matchFix, resetMatch, currentPlace, gpsStatus } from './nav/gps.js';
 import { trip, recordFix, resetTrip, saveTripLocal, loadSavedTrip, tripSummary, downloadGpx } from './nav/trip.js';
 import { stepDrive } from './nav/drive.js';
 
@@ -26,6 +26,7 @@ import { createMapView } from './components/MapView.js';
 import { createCameraView } from './components/CameraView.js';
 import { createGuidancePanel } from './components/GuidancePanel.js';
 import { createDriverPage } from './components/DriverPage.js';
+import { createPricingPage } from './components/PricingPage.js';
 
 /* The app: mounts the components and owns the flow between them — routing, starting and
    stopping navigation, GPS fixes, rerouting, arrival, the camera, and one main loop that
@@ -72,6 +73,7 @@ export function startApp() {
     },
     onFindRoad: () => { showPage('nav'); findRoad(); },
   });
+  createPricingPage('plans-slot');
   const instructions = createInstructions({ render: ins => guidance.render(ins), say: (t, p) => voice.say(t, p) });
 
   const camera = createCamera({
@@ -96,6 +98,7 @@ export function startApp() {
   function showPage(p) {
     $('pageNav').hidden = p !== 'nav';
     $('pageProfile').hidden = p !== 'profile';
+    $('pagePlans').hidden = p !== 'plans';
     tabs.select(p);
   }
   function setMargin(m) {
@@ -138,7 +141,7 @@ export function startApp() {
     if (S.navigating) toggleNav();
     const r = await planRoute(from || await currentPlace(), to);
     routeLoaded(false);
-    if (S.source === 'gps') clearTrip();
+    if (S.source === 'gps') { clearTrip(); startGps(onFix); updateMatch(); }
     controls.setNavEnabled(true);
     instructions.show({ text: 'Route ready', sub: S.camLive ? 'Start navigation when ready.' : 'Start navigation when ready. It turns on the camera too.' });
     return `${r.from} → ${r.to} · ${r.miles.toFixed(1)} mi · ${Math.round(r.mins)} min`;
@@ -173,7 +176,6 @@ export function startApp() {
     controls.setTrip(null);
   }
   function endTrip() {
-    stopGps();
     if (trip.pts.length > 1) { saveTripLocal(); savedTrip = null; controls.setTrip('Save trip'); }
   }
 
@@ -212,7 +214,9 @@ export function startApp() {
     if (e.code === 'Space' && !/INPUT|BUTTON|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); toggleNav(); }
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && S.navigating) keepAwake(true);
+    if (document.hidden) return;
+    if (S.navigating) keepAwake(true);
+    restartGps();   // iPhones pause location while the page is in the background
   });
 
   // ---------- main loop: one clock for map and vision ----------
@@ -249,9 +253,11 @@ export function startApp() {
     });
     if (isNavigating()) {
       const ins = decide(L, nx, S.margin, { camLive: S.camLive, road: currentRoad(S.s) });
-      instructions.settle(withPosition(ins, { source: S.source, fix: G.fix, denied: G.denied, err: G.err, offRoute: G.offRoute }), now);
+      instructions.settle(withPosition(ins, { source: S.source, fix: G.fix, denied: G.denied, err: G.err,
+        offRoute: G.offRoute, coarse: G.coarse, stale: gpsAge(now) > STALE_MS }), now);
     }
-    mapView.setGpsStatus(gpsStatus(S.source));
+    checkGps(now);
+    mapView.setGpsStatus(gpsStatus(S.source, now));
     voice.pump();
 
     if (now - fpsT >= 1000) {

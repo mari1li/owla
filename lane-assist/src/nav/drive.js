@@ -14,7 +14,7 @@ export function stepDrive(dt, running) {
   let arrived = false;
   if (gps) {
     S.speed = G.watch != null ? G.speed : 0;
-    if (G.s != null && !G.offRoute) {
+    if (G.s != null && !G.offRoute && !G.coarse) {
       const target = Math.min(R.len, G.s + G.speed * Math.min(2, (performance.now() - G.sT) / 1000));
       if (Math.abs(target - S.s) > 150) S.s = target;
       else S.s += (target - S.s) * Math.min(1, dt * 3);
@@ -27,7 +27,7 @@ export function stepDrive(dt, running) {
     if (S.s >= R.len - 2) { S.s = R.len; arrived = true; }
   }
 
-  const loose = gps && !!G.fix && (G.offRoute || G.s == null);
+  const loose = gps && !!G.fix && (G.offRoute || G.s == null || G.coarse);
   const p = loose
     ? { lat: G.fix.p[0], lon: G.fix.p[1], heading: G.course != null ? G.course : (S.heading || 0) }
     : posAt(S.s);

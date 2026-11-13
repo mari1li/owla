@@ -96,6 +96,7 @@ src/
     GuidancePanel.js    The instruction, blind-spot check, inputs and lane ribbon
     LaneRibbon.js       Left lane · you · right lane, coloured by state
     DriverPage.js       Driver profile, position source, camera tuning
+    PricingPage.js      Plans tab: Free / Plus / Family, monthly or yearly (plans in config.js)
 
   nav/                  Where the car is and where it's going
     route.js            Active route (R), maneuvers from OSRM steps, position along the route
@@ -198,7 +199,16 @@ The camera, map and speech need a real browser and phone; test those by hand.
 
 ### Position and speed
 
-With **Phone GPS** (the default):
+With **Phone GPS** (the default), the map follows the phone as soon as a route is set, so
+the car shows where you are before you start navigating.
+
+- **The location stream is kept alive.** The app asks for updates without a timeout (on iPhones
+  a timeout can end the stream). It restarts the stream after an error, after 10 s without a fix,
+  and whenever the page comes back from the background.
+- **Approximate location is detected.** With Precise Location off, fixes are 1–3 km off. The
+  app shows "Location is only approximate" and where to turn Precise Location on, places the car
+  at the rough position, and doesn't reroute.
+- **The HUD shows the fix**: `GPS ±8 m`, `approximate`, or `GPS lost 12 s`.
 
 - **Speed** is the phone's own GPS speed when it reports one. Otherwise it's the distance
   between fixes over the time between them.
@@ -261,6 +271,21 @@ picture. The area is saved on the phone.
 | Vehicle and person detection | Real (COCO-SSD lite MobileNet v2) |
 | Distance | Estimated (pinhole model, tunable focal length) |
 | Closing speed and time-to-arrival | Inferred from how fast a box grows |
+
+## Plans
+
+The **Plans** tab offers three tiers. Safety features stay free for everyone.
+
+| Plan | Price | Adds |
+|---|---|---|
+| Free | $0 | Navigation, voice, lane detection, closing-traffic and person warnings, blind-spot reminders, 3 driver profiles, last trip as GPX |
+| Plus | $3.99/month or $34.99/year | Unlimited trip history, permit practice-hours log, drive reports, weekly progress, voice settings |
+| Family | $7.99/month or $69.99/year | Up to 4 drivers, supervisor view, shareable trip reports, practice hours export |
+
+Plans, prices and features are edited in `PLANS` in `src/config.js`. Payments aren't wired up:
+the paid plans show **Coming soon**, and features that aren't built yet are marked *soon*.
+Selling plans needs a payment provider (for example Stripe Checkout) and a small backend to
+check who has paid.
 
 ## Limitations
 

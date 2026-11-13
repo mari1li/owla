@@ -2,11 +2,21 @@ import { MAX_GPS_SPEED } from '../config.js';
 import { haversine, bearing, toRad } from '../lib/geo.js';
 
 // Live position from the phone's GPS. `s` is the matched distance along the route.
+// coarse: the phone is only giving approximate location (Precise Location is off).
 export const G = {
   watch: null, fix: null, speed: 0, course: null,
   s: null, sT: 0, off: 0, offRoute: false, lastReroute: -1e9,
-  err: null, denied: false,
+  err: null, denied: false, coarse: false,
+  onFix: null, startedAt: 0, restartedAt: 0,
 };
+
+export const COARSE_M = 150;     // worse than this, a fix can't tell which road you're on
+export const STALE_MS = 10000;   // no fix for this long: the stream has probably stalled
+
+// navigator.geolocation, or a stand-in for tests.
+let geoOverride = null;
+export const setGeolocation = g => { geoOverride = g; };
+const geo = () => geoOverride || (typeof navigator !== 'undefined' && navigator.geolocation) || null;
 
 // Speed after a new fix. The phone's own (Doppler) speed is the most accurate when it has one;
 // otherwise distance between fixes over the time between them. Movement smaller than the fix's
@@ -56,6 +66,8 @@ export function resetMatch() {
 export function matchFix(route) {
   if (!G.fix || route.pts.length < 2) return;
   const f = G.fix;
+  // An approximate fix can't be matched to a road; show it as it is, and don't count it as off route.
+  if (G.coarse) return;
   let m = matchRoute(route, f.p, G.s);
   if (G.s != null && m.d > 50) { const all = matchRoute(route, f.p, null); if (all.d < m.d) m = all; }
   // Off route after three fixes in a row clearly away from it (allowing for GPS accuracy).
@@ -76,29 +88,61 @@ function applyPosition(pos) {
     speed: c.speed, heading: c.heading, now: performance.now() };
   const prev = G.fix;
   G.err = null; G.denied = false;
-  G.speed = nextSpeed(prev, fix, G.speed);
-  G.course = nextCourse(prev, fix, G.speed, G.course);
+  G.coarse = fix.acc > COARSE_M;
+  // Speed and course from approximate fixes would be nonsense (they jump by hundreds of metres).
+  const usable = prev && prev.acc <= COARSE_M ? prev : null;   // don't measure from an approximate fix
+  G.speed = G.coarse ? 0 : nextSpeed(usable, fix, G.speed);
+  G.course = G.coarse ? G.course : nextCourse(prev, fix, G.speed, G.course);
   G.fix = fix;
   return fix;
 }
 
-export function startGps(onFix) {
-  if (G.watch != null) return;
-  if (!('geolocation' in navigator)) { G.err = "This browser can't share its location."; return; }
-  G.watch = navigator.geolocation.watchPosition(pos => onFix(applyPosition(pos)), e => {
+function watch() {
+  const g = geo();
+  G.watch = g.watchPosition(pos => G.onFix(applyPosition(pos)), e => {
     G.denied = e.code === 1;
-    G.err = G.denied
-      ? 'Location access is off. Allow it for this site (iPhone: Settings → Privacy & Security → Location Services → Safari Websites), then start again.'
-      : 'Waiting for a GPS signal. It can take a minute, and needs a view of the sky.';
-    if (G.denied) stopGps();
-  }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+    if (G.denied) {
+      G.err = 'Location access is off. Allow it for this site (iPhone: Settings → Privacy & Security → Location Services → Safari Websites), then start again.';
+      stopGps();
+      return;
+    }
+    // A timeout or a lost signal can end the stream on some phones: start it again.
+    G.err = 'Waiting for a GPS signal. It can take a minute, and needs a view of the sky.';
+    restartGps();
+  // No timeout: on iPhones a timeout error can end the watch, and a parked car may go a while
+  // without a new fix. checkGps() restarts a stream that has really gone quiet.
+  }, { enableHighAccuracy: true, maximumAge: 0 });
+}
+
+export function startGps(onFix) {
+  G.onFix = onFix;
+  if (G.watch != null) return;
+  if (!geo()) { G.err = "This browser can't share its location."; return; }
+  G.startedAt = G.restartedAt = performance.now();
+  watch();
+}
+
+export function restartGps() {
+  if (G.watch == null || !geo()) return;
+  geo().clearWatch(G.watch);
+  G.restartedAt = performance.now();
+  watch();
+}
+
+// Called every frame: restart a stream that has stopped sending fixes (at most every 10 s).
+export function checkGps(now) {
+  if (G.watch == null) return;
+  const lastHeard = Math.max(G.fix ? G.fix.now : 0, G.startedAt);
+  if (now - lastHeard > STALE_MS && now - G.restartedAt > STALE_MS) restartGps();
 }
 
 export function stopGps() {
-  if (G.watch != null) navigator.geolocation.clearWatch(G.watch);
+  if (G.watch != null && geo()) geo().clearWatch(G.watch);
   G.watch = null;
   G.speed = 0;
 }
+
+export const gpsAge = now => G.fix ? now - G.fix.now : Infinity;
 
 // One position for "start from where I am".
 export function currentPlace() {
@@ -113,9 +157,13 @@ export function currentPlace() {
 }
 
 // The small status next to the speed: accuracy, or why there's no fix.
-export function gpsStatus(source) {
+export function gpsStatus(source, now = performance.now()) {
   if (source !== 'gps') return { text: '', weak: false };
-  const text = G.denied ? 'location off' : G.watch == null ? '' : !G.fix ? 'GPS…' : `GPS ±${Math.round(G.fix.acc)} m`;
-  const weak = G.denied || (!!G.fix && G.fix.acc > 30) || (G.watch != null && !G.fix);
-  return { text, weak };
+  if (G.denied) return { text: 'location off', weak: true };
+  if (G.watch == null) return { text: '', weak: false };
+  if (!G.fix) return { text: 'GPS…', weak: true };
+  const age = gpsAge(now);
+  if (age > STALE_MS) return { text: `GPS lost ${Math.round(age / 1000)} s`, weak: true };
+  if (G.coarse) return { text: 'approximate', weak: true };
+  return { text: `GPS ±${Math.round(G.fix.acc)} m`, weak: G.fix.acc > 30 };
 }
